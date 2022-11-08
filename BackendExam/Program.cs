@@ -1,4 +1,6 @@
+using BackendExam;
 using ExamContext;
+using ExamContext.Chef;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,7 +9,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddExamContext();
-
+builder.Services.AddSingleton<IChefFactory, ChefFactory>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -24,4 +26,3 @@ app.MapControllers();
 app.BootstrapExamContext();
 
 app.Run();
-

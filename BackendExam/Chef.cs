@@ -23,40 +23,48 @@ namespace BackendExam
             _id = Id;
             _deliveryDesk = deliveryDesk;
         }
-        public async void Run()
+        public void Run()
         {
+            Thread.Sleep(100);
             while (true)
             {
                 if (_orderQueue.Queue.Count != 0)
                 {
                     List<Task<Pizza>> pizzasInOven = new();
-                    Order theOrder;
+                    Order? theOrder = null;
+                    bool hasOrder = false;
                     lock (_orderQueue)
                     {
-                        theOrder = _orderQueue.Queue.Dequeue();
+                         hasOrder = _orderQueue.Queue.TryDequeue(out theOrder);
 
                     }
-                    foreach (var aPizza in theOrder.Pizzas) // Do this for every pizza in the order 
+                    if (hasOrder)
                     {
-                        int numberOfPizzas = aPizza.quantity;
-                        int counter = 0;
-                        var ingredientList = _cookbook.CookbookList[aPizza.pizzaType]; //Lookup what Ingredients are needed for the pizza                    
-
-                        while (counter != numberOfPizzas)
+                        foreach (var aPizza in theOrder.Pizzas) // Do this for every pizza in the order 
                         {
-                            lock (_warehouse)
+                            int numberOfPizzas = aPizza.quantity;
+                            int counter = 0;
+                            var ingredientList = _cookbook.CookbookList[aPizza.pizzaType]; //Lookup what Ingredients are needed for the pizza                    
+
+                            while (counter != numberOfPizzas)
                             {
+
                                 List<Ingredient> ingredients = new();
                                 foreach (var ingredientAndQuantity in ingredientList)  // For each ingredient from the cookbook 
                                 {
 
                                     for (int i = 0; i != ingredientAndQuantity.quantity; i++) //Try to get the needed number of ingredients from the warehouse 
                                     {
-                                        var theIngredient = _warehouse.GetIngredient(ingredientAndQuantity.ingredient, this);
-                                        if (theIngredient != null)
+                                        Ingredient? theIngredient;
+                                        lock (_warehouse)
                                         {
-                                            ingredients.Add(theIngredient);
+                                            theIngredient = _warehouse.GetIngredient(ingredientAndQuantity.ingredient, this);
                                         }
+                                            if (theIngredient != null)
+                                            {
+                                                ingredients.Add(theIngredient);
+                                            }
+                                        
                                     }
 
                                 }
@@ -65,11 +73,12 @@ namespace BackendExam
                             }
 
                         }
+                        var finishedOrder = Task.WhenAll(pizzasInOven).Result;
+                        lock (_deliveryDesk)
+                        {
+                            _deliveryDesk.FinishedOrders.Add(theOrder.Id, finishedOrder.ToList());
+                        }
                     }
-
-                    var finishedOrder = await Task.WhenAll(pizzasInOven);
-                    _deliveryDesk.FinishedOrders.Add(theOrder.Id, finishedOrder.ToList());
-
                 }
 
                 //1.Dictionary to store pizzatype and number of pizzas

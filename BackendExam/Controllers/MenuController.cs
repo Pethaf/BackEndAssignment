@@ -16,6 +16,10 @@ namespace BackendExam.Controllers
         [HttpGet("/menu")]
         public async Task<List<PizzaRepresentation>> GetMenu()
         {
+            if(_menu.MenuItems.Count == 0)
+            {
+                return new List<PizzaRepresentation>();
+            }
             Task<List<PizzaRepresentation>> getList = new(() =>
             {
                 List<PizzaRepresentation> pizzas = new();

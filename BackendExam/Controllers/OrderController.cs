@@ -21,23 +21,43 @@ namespace BackendExam.Controllers
         [HttpGet("/order/{orderId}")]
         public async Task<IActionResult> GetOrder(int orderId)
         {
-            lock (_deliveryDesk)
+            Task<IActionResult> getOrder = new( () =>
             {
-                if (_deliveryDesk.FinishedOrders.ContainsKey(orderId))
+                List<Pizza> del = new();
+                bool hasOrder;
+                lock (_deliveryDesk)
                 {
-                    List<Pizza> delivery;
-                    delivery = _deliveryDesk.FinishedOrders[orderId];
+                    hasOrder = _deliveryDesk.FinishedOrders.TryGetValue(orderId, out del);
                     _deliveryDesk.FinishedOrders.Remove(orderId);
-                    var OrderToDeliver = new PizzaOrderDoneDTO();
-                    OrderToDeliver.status = "done";
-                    foreach (Pizza thePizza in delivery)
-                    {
-                        OrderToDeliver.order.Add(new DeliveredPizza() { id = thePizza.Id, type = thePizza.Name.Name });
-                    }
-                    return Ok(OrderToDeliver);
+                    
                 }
-            }
-            return NotFound();
+                if (!hasOrder)
+                {
+                    return NotFound();
+                }
+                var OrderToDeliver = new PizzaOrderDoneDTO();
+                OrderToDeliver.status = "done";
+                foreach (Pizza thePizza in del)
+                {
+                    OrderToDeliver.order.Add(new DeliveredPizza() { id = thePizza.Id, type = thePizza.Name.Name });
+                }
+                return Ok(OrderToDeliver);
+
+            });
+            getOrder.Start();
+            return await getOrder;
+            
+            //lock (_deliveryDesk)
+            //{
+            //    if (_deliveryDesk.FinishedOrders.ContainsKey(orderId))
+            //    {
+            //        List<Pizza> delivery;
+            //        delivery = _deliveryDesk.FinishedOrders[orderId];
+            //        _deliveryDesk.FinishedOrders.Remove(orderId);
+                    
+            //    }
+            //}
+            //return NotFound();
         }
         [HttpPost("/order")]
         [ProducesResponseType(StatusCodes.Status201Created)]
@@ -67,30 +87,36 @@ namespace BackendExam.Controllers
                 return BadRequest();
             }
 
-            Dictionary<String, int> quantityOrder = new(); 
-            foreach(string pizzaName in pizzaOrder)
+            Task<ExamContext.Order> MakeOrder = new(() =>
             {
-                if (quantityOrder.ContainsKey(pizzaName))
+                Dictionary<String, int> quantityOrder = new();
+                foreach (string pizzaName in pizzaOrder)
                 {
-                    quantityOrder[pizzaName]++;
+                    if (quantityOrder.ContainsKey(pizzaName))
+                    {
+                        quantityOrder[pizzaName]++;
+                    }
+                    else
+                    {
+                        quantityOrder[pizzaName] = 1;
+                    }
                 }
-                else
+                List<(PizzaType, int)> theOrder = new();
+                foreach (var Pizza in quantityOrder)
                 {
-                    quantityOrder[pizzaName] = 1;
+                    theOrder.Add((new PizzaType(Pizza.Key), Pizza.Value));
                 }
-            }
+                Order handOffOrder = new Order(theOrder);
+                return handOffOrder;
+            });
             
-            List < (PizzaType, int) > theOrder= new();
-            foreach(var Pizza in quantityOrder)
-            {
-                theOrder.Add((new PizzaType(Pizza.Key), Pizza.Value));
-            }
-            Order handOffOrder = new Order(theOrder);
+            MakeOrder.Start();
+            var anOrder = await MakeOrder;
             lock (_orderQueue)
             {
-                _orderQueue.Queue.Enqueue(handOffOrder);
+                _orderQueue.Queue.Enqueue(anOrder);
             }
-                return Created($"/order/{handOffOrder.Id}",null);
+                return Created($"/order/{anOrder.Id}",null);
          
         }
 

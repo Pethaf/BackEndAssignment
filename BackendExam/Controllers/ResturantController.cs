@@ -23,34 +23,40 @@ namespace BackendExam.Controllers
         [HttpPost("/restaurant/add-ingredients")]
         public async Task<IActionResult> AddIngredient([FromBody] AddIngredient addIngredient)
         {
-            var tmp = Request.Headers["Authorization"];
-            var token = tmp.ToString().Substring(7);
-            if (!JWTHandler.ValidateCurrentToken(token))
+            Task<IActionResult> t = new(() =>
             {
-                return StatusCode(403);
-            }
-            var decodedToken = JWTHandler.DecodeToken(token);
-            var name = decodedToken.Claims.Where(claim => claim.Type == "nameid").FirstOrDefault().Value;
-            var user = _userRepository.Users.Find(user => user.UserName == name);
-            if (!user.Roles.Any(role => role.Name == "Manager"))
-            {
-                return StatusCode(403);
-            }
-            if((int) addIngredient.ingredientType == 0)
-            {
-                return BadRequest();
-            }
-            lock (_warehouse)
-            {
-                _warehouse.AddIngredient(addIngredient.ingredientType, addIngredient.Id);
-            }
-            return Accepted();
+                var tmp = Request.Headers["Authorization"];
+                var token = tmp.ToString().Substring(7);
+                if (!JWTHandler.ValidateCurrentToken(token))
+                {
+                    return StatusCode(403);
+                }
+                var decodedToken = JWTHandler.DecodeToken(token);
+                var name = decodedToken.Claims.Where(claim => claim.Type == "nameid").FirstOrDefault().Value;
+                var user = _userRepository.Users.Find(user => user.UserName == name);
+                if (!user.Roles.Any(role => role.Name == "Manager"))
+                {
+                    return StatusCode(403);
+                }
+                if ((int)addIngredient.ingredientType == 0)
+                {
+                    return BadRequest();
+                }
+                lock (_warehouse)
+                {
+                    _warehouse.AddIngredient(addIngredient.ingredientType, addIngredient.Id);
+                }
+                return Accepted();
+            });
+            t.Start();
+            return await t;
         }
         [HttpPost("/restaurant/enter")]
         public async Task<IActionResult> PunchIn()
         {
-                var tmp = Request.Headers["Authorization"];
-                var token = tmp.ToString().Substring(7);
+            Task<IActionResult> doStuff = new(() =>
+            {
+                var token = Request.Headers["Authorization"].ToString().Substring(7);
                 if (!JWTHandler.ValidateCurrentToken(token))
                 {
                     return StatusCode(403);
@@ -62,22 +68,58 @@ namespace BackendExam.Controllers
                 {
                     return StatusCode(403);
                 }
-                    try
+                if (user.Roles.Any(role => role.Name == "Manager"))
+                {
+                    return StatusCode(403);
+                }
+                try
+                {
+                    lock (_timeClock)
                     {
-                      lock (_timeClock)
-                       {
-                        if(_timeClock.GetUser(user) != null)
+                        if (_timeClock.GetUser(user) != null)
                         {
                             return BadRequest();
                         }
                         _timeClock.Enter(user);
-                       }
                     }
-                    catch(ExamException)
-                    {
-                        return StatusCode(500); 
-                    }
+                }
+                catch (ExamException)
+                {
+                    return StatusCode(500);
+                }
                 return Accepted();
+            });
+            doStuff.Start();
+            return await doStuff; 
+                //var tmp = Request.Headers["Authorization"];
+                //var token = tmp.ToString().Substring(7);
+                //if (!JWTHandler.ValidateCurrentToken(token))
+                //{
+                //    return StatusCode(403);
+                //}
+                //var decodedToken = JWTHandler.DecodeToken(token);
+                //var name = decodedToken.Claims.Where(claim => claim.Type == "nameid").FirstOrDefault().Value;
+                //var user = _userRepository.Users.Find(user => user.UserName == name);
+                //if (user.Roles.Any(role => role.Name == "Manager"))
+                //{
+                //    return StatusCode(403);
+                //}
+                //    try
+                //    {
+                //      lock (_timeClock)
+                //       {
+                //        if(_timeClock.GetUser(user) != null)
+                //        {
+                //            return BadRequest();
+                //        }
+                //        _timeClock.Enter(user);
+                //       }
+                //    }
+                //    catch(ExamException)
+                //    {
+                //        return StatusCode(500); 
+                //    }
+                //return Accepted();
         }
             
         [HttpPost("/restaurant/leave")]

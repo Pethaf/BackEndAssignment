@@ -21,11 +21,29 @@ namespace BackendExam.Controllers
         [HttpPost("/login")]
         public async Task<IActionResult> Login([FromBody]UserLoginDTO userLogin)
         {
+
             if(userLogin.Username == null || userLogin.Password == null)
             {
                 return StatusCode(403);
             }
-            var tmp = _userRepository.Users.Find(user => user.UserName == userLogin.Username); //Move to task 
+            Task<IActionResult> CheckUser = new(() =>
+            {
+                var tmp = _userRepository.Users.Find(user => user.UserName == userLogin.Username);
+                if (tmp == null)
+                {
+                    return StatusCode(401);
+                }
+                if (tmp.Password != userLogin.Password)
+                {
+                    return StatusCode(403);
+                }
+                return Accepted(new TransferJWT() { Value = JWTHandler.GenerateToken(userLogin.Username) });
+            }); 
+            
+            CheckUser.Start();
+            return await CheckUser;
+            
+            /*var tmp = _userRepository.Users.Find(user => user.UserName == userLogin.Username); //Move to task 
             if(tmp == null)
             {
                 return StatusCode(401);
@@ -33,9 +51,9 @@ namespace BackendExam.Controllers
             if(tmp.Password != userLogin.Password)
             {
                 return StatusCode(403);
-            }
+            }*/
 
-            return Accepted(new TransferJWT() { Value = JWTHandler.GenerateToken(userLogin.Username) });
+            
             //var tmpString = 
             //    return Accepted("{\"value\" : \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1laWQiOiJMaW51cyIsIm5iZiI6MTY2NjU0MjM3OCwiZXhwIjoxNjY3MTQ3MTc1LCJpYXQiOjE2NjY1NDIzNzgsImlzcyI6Imh0dHA6Ly9teXNpdGUuY29tIiwiYXVkIjoiaHR0cDovL215YXVkaWVuY2UuY29tIn0.btgf2doOfmIW2xdKcIDIB3fSJPov0FcODoBe4Ojo570\"}");
             //var tmp2 = Accepted(tmpString);
